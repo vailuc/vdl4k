@@ -17,15 +17,14 @@ A robust YouTube/4K video downloader with modular architecture and global instal
 ## Architecture
 vdl4k is built with a modular architecture consisting of:
 
-- **bin/vdl4k**: Main executable script
 - **lib/validators.sh**: URL and input validation
 - **lib/video_utils.sh**: Video processing functions
 - **lib/archive.sh**: Download history management
 - **lib/download.sh**: Video download and processing
 - **lib/config.sh**: Configuration management
-- **install.sh**: Global installation system with smart path detection
+- **install.sh**: **XDG-compliant installation system** with smart path detection
 
-## Installation
+## Installation Architecture
 
 ### Prerequisites
 Ensure the following tools are installed on your system:
@@ -41,10 +40,11 @@ Ensure the following tools are installed on your system:
 4. **Done!** vdl4k is now available globally as `vdl4k` and `vdl4k-portable`
 
 The installation script will:
-- ✅ Create `~/bin` directory if it doesn't exist
-- ✅ Add `~/bin` to your PATH (in `.bashrc` and `.zshrc`)
+- ✅ Create `~/.local/bin` directory if it doesn't exist
+- ✅ Add `~/.local/bin` to your PATH (in `.bashrc` and `.zshrc`)
 - ✅ Install both versions globally
 - ✅ Check dependencies
+- ✅ Make scripts executable
 - ✅ Make scripts executable
 
 **After installation, restart your terminal or run:**
@@ -66,10 +66,10 @@ If you prefer to install manually:
 
 1. Clone the repository: `git clone <repository-url>`
 2. Navigate to the project directory: `cd vdl4k`
-3. Create local bin directory: `mkdir -p ~/bin`
-4. Copy scripts: `cp bin/vdl4k ~/bin/` and `cp vdl4k-portable ~/bin/`
-5. Make executable: `chmod +x ~/bin/vdl4k ~/bin/vdl4k-portable`
-6. Add to PATH: `echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc` (or `~/.zshrc` if using zsh)
+3. Create local bin directory: `mkdir -p ~/.local/bin`
+4. Copy scripts: `cp bin/vdl4k ~/.local/bin/` and `cp vdl4k-portable ~/.local/bin/`
+5. Make executable: `chmod +x ~/.local/bin/vdl4k ~/.local/bin/vdl4k-portable`
+6. Add to PATH: `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc` (or `~/.zshrc` if using zsh)
 7. Restart terminal or: `source ~/.bashrc` (or `source ~/.zshrc`)
 
 ### Configuration
@@ -106,27 +106,22 @@ vdl4k --config
 
 # Show help
 vdl4k --help
-
 # Or use the portable version:
 vdl4k-portable https://youtu.be/VIDEO_ID
 vdl4k-portable --help
-```
 
-## What's New in v0.57
+## Installation Architecture
 
-🚀 **Global Installation System** - Run `./install.sh` once and use `vdl4k` from anywhere on your system!
-
-- ✅ **One-Command Installation**: `./install.sh` handles everything automatically
-- ✅ **Global PATH Integration**: Adds `~/bin` to your shell configuration
-- ✅ **Smart Module Detection**: Automatically finds and loads project modules
-- ✅ **Dual Global Access**: Both modular and portable versions available globally
-- ✅ **Dependency Checking**: Verifies yt-dlp, ffmpeg, and ffprobe are installed
-- ✅ **Cross-Shell Support**: Works with both bash and zsh
+The **XDG Base Directory compliant** installation system creates intelligent wrappers that:
+- 🏠 **Uses `~/.local/bin`**: Follows XDG Base Directory specification
+- 🔍 **Auto-detect project location** from anywhere on the system
+- 📦 **Load modules dynamically** from the correct project directory
+- 🏠 **Integrate with shell PATH** for seamless command-line access
+- 🔄 **Support both versions** (modular and portable) globally
 
 ## Two Versions Available
 
 ### Modular Version (`vdl4k`)
-- **Recommended for development and customization**
 - Multi-file structure with separate modules
 - Easier to maintain and extend
 - Requires full project structure
@@ -169,7 +164,7 @@ vdl4k/
 └── vdl4k-portable    # Portable single-file version
 
 # After installation with ./install.sh:
-~/bin/
+~/.local/bin/
 ├── vdl4k            # Global modular version
 └── vdl4k-portable   # Global portable version
 ```
@@ -205,12 +200,12 @@ v0.57
 ## Changelog
 
 ### v0.57 (Latest)
-- ✨ **Global Installation System**: Added comprehensive installation script that installs vdl4k globally
-- 🏠 **Smart PATH Integration**: Automatically adds `~/bin` to user PATH in `.bashrc` and `.zshrc`
-- 🔍 **Intelligent Module Detection**: Wrapper script automatically locates project modules from anywhere
-- 📁 **Enhanced Project Structure**: Updated documentation to reflect global installation workflow
-- 🚀 **Improved User Experience**: One-command installation with dependency checking
-- 📚 **Updated Documentation**: Enhanced README and flowcharts with installation flows
+- ✨ **XDG Base Directory Compliance**: Now uses `~/.local/bin` following Linux standards
+- 🏠 **Enhanced PATH Integration**: Improved shell configuration for bash and zsh
+- 🔍 **Robust Project Detection**: Better wrapper scripts with multiple fallback methods
+- 📁 **Standard Installation Paths**: Follows XDG Base Directory specification
+- 🛠️ **Duplicate Prevention**: Automatically removes old PATH entries before adding new ones
+- 📚 **Updated Documentation**: Enhanced installation guides for standard Linux setups
 
 ### v0.56
 - 🏗️ **Complete Modular Architecture**: Refactored monolithic script into 6 specialized modules

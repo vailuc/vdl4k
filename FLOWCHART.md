@@ -118,12 +118,12 @@ graph TD
     A[User Downloads vdl4k] --> B[Clone Repository]
     B --> C[Run ./install.sh]
     C --> D[Check Dependencies: yt-dlp, ffmpeg, ffprobe]
-    D --> E{Create ~/bin Directory?}
+    D --> E{Create ~/.local/bin Directory?}
     E -->|No| F[Skip]
-    E -->|Yes| G[Create ~/bin Directory]
+    E -->|Yes| G[Create ~/.local/bin Directory]
     G --> H[Update PATH in .bashrc/.zshrc]
     H --> I[Install Global Wrapper Script]
-    I --> J[Install Portable Version to ~/bin/]
+    I --> J[Install Portable Version to ~/.local/bin/]
     J --> K[Verify Installation]
     K --> L[Installation Complete]
 
