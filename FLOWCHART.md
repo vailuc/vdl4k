@@ -99,9 +99,6 @@ graph LR
 
     G --> X[yt-dlp Integration]
     G --> Y[File Processing]
-    G --> Z[Download Management]
-```
-
 ## Key Improvements in v0.57
 
 1. **XDG Base Directory Compliance**: Uses `~/.local/bin` following Linux standards
@@ -113,7 +110,7 @@ graph LR
 
 ## Installation Flow
 
-```mermaid
+{{ ... }}
 graph TD
     A[User Downloads vdl4k] --> B[Clone Repository]
     B --> C[Run ./install.sh]
@@ -159,3 +156,12 @@ graph TD
     I --> J[Apply Command Line Overrides]
     J --> K[Ready for Use]
 ```
+
+## Documentation
+
+The vdl4k project includes comprehensive documentation:
+
+- **[README.md](README.md)**: Main project documentation, installation guide, and usage examples
+- **[DEVELOPMENT.md](DEVELOPMENT.md)**: Development workflow, branch naming conventions, and contribution guidelines
+- **[FLOWCHART.md](FLOWCHART.md)**: Architecture diagrams and system flow visualization
+- **[GOALS](GOALS)**: Project objectives and design principles

@@ -141,37 +141,29 @@ The **XDG Base Directory compliant** installation system creates intelligent wra
 | `FORMAT` | yt-dlp format string | Best quality up to 4K |
 | `SUB_LANGS` | Subtitle languages | English |
 | `VERBOSE` | Enable verbose output | false |
-| `FORCE_DOWNLOAD` | Force re-download | false |
 | `DISABLE_ARCHIVE` | Disable download tracking | false |
 
 ## Project Structure
-```
 vdl4k/
-├── bin/
-│   └── vdl4k          # Main executable (modular)
-├── lib/
-│   ├── config.sh      # Configuration management
-│   ├── utils.sh       # Core utilities
-│   ├── validators.sh  # Input validation
-│   ├── video_utils.sh # Video processing
-│   ├── archive.sh     # Download history
-│   └── download.sh    # Download operations
-├── config/
-│   └── default.conf   # Default configuration
-├── doc/               # Documentation
-├── Makefile          # Development tasks
-├── install.sh        # Installation script
-└── vdl4k-portable    # Portable single-file version
-
-# After installation with ./install.sh:
-~/.local/bin/
-├── vdl4k            # Global modular version
-└── vdl4k-portable   # Global portable version
-```
+├── bin/vdl4k              # Main modular version
+├── lib/                   # Core modules
+│   ├── config.sh          # Configuration management
+│   ├── utils.sh           # Utilities and helpers
+│   ├── validators.sh      # Input validation
+│   ├── video_utils.sh     # Video processing
+│   ├── archive.sh         # Download tracking
+│   └── download.sh        # Download operations
+├── config/                # Configuration files
+├── doc/                   # Documentation
+├── install.sh             # Installation script
+├── vdl4k-portable         # Portable version
+├── Makefile               # Development tasks
+├── README.md              # Project documentation
+├── FLOWCHART.md           # Architecture diagrams
+├── DEVELOPMENT.md         # Development workflow guide
+└── GOALS                  # Project objectives
 
 ## Development
-```bash
-# Run tests
 make test
 
 # Clean temporary files
@@ -225,9 +217,12 @@ MIT
 4. Test thoroughly
 5. Submit a pull request
 
-## Issues and Support
-- Report bugs via GitHub Issues
-- Check the [Flowchart](FLOWCHART.md) for architecture details
-- Review the [Goals](GOALS) for project objectives
+## Development Workflow
+For detailed development guidelines, see [DEVELOPMENT.md](DEVELOPMENT.md) which includes:
+- Branch naming conventions
+- Commit message standards
+- Testing requirements
+- Code standards
+- Release process
 
 ---
