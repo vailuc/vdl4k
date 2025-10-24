@@ -1,0 +1,56 @@
+# vdl4k .gitignore
+
+# Archives and downloads
+archives/
+downloads/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+temp/
+tmp/
+.tmp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+*.DS_Store
+
+# User configuration (should be in ~/.config/vdl4k/)
+# config/vdl4k.conf
+
+# Cache directories (should be in ~/.cache/vdl4k/)
+# cache/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Test files
+test/
+tests/
+*.test
+
+# Documentation builds
+build/
+dist/
+*.pdf
+
+# Archive directory (contains moved files)
+archive/
+
+# Personal notes or temporary files
+notes.txt
+todo.txt
+scratch.*

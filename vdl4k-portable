@@ -1,0 +1,1161 @@
+#!/bin/bash
+
+# vdl4k - YouTube Downloader with 4K support (Portable Version)
+# Version: 0.56
+# This is a self-contained portable version with all modules embedded
+# For easier distribution and deployment
+
+# Set strict bash options
+set -o nounset
+set -o pipefail
+
+# Get script directory
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+PROJECT_DIR="$SCRIPT_DIR"
+
+# Embedded default configuration
+EMBEDDED_CONFIG="# vdl4k Default Configuration
+# This file contains default settings for vdl4k
+# User can override in ~/.config/vdl4k/config.sh
+
+# Directory settings
+# DOWNLOAD_DIR: Default directory where videos are downloaded
+DOWNLOAD_DIR=\"\${HOME}/Downloads/Videos Archive\"
+# CONFIG_DIR: Directory for configuration files
+CONFIG_DIR=\"\${XDG_CONFIG_HOME:-\$HOME/.config}/vdl4k\"
+# CACHE_DIR: Directory for temporary files and logs
+CACHE_DIR=\"\${XDG_CACHE_HOME:-\$HOME/.cache}/vdl4k\"
+
+# File paths
+# LOG_FILE: Path to the log file for download summaries
+LOG_FILE=\"\${CACHE_DIR}/vdl4k.log\"
+# ARCHIVE_FILE: File to track downloaded videos (prevents re-downloads)
+ARCHIVE_FILE=\"\${CACHE_DIR}/downloaded.txt\"
+# COOKIE_FILE: Path to cookies file for authenticated downloads (optional)
+COOKIE_FILE=\"\${CONFIG_DIR}/cookies.txt\"
+
+# Download settings
+# FORMAT: yt-dlp format string for video and audio selection
+FORMAT='bestvideo[height<=2160]+bestaudio/best[height=2160]/bestvideo[height<=1080]+bestaudio/best[height=1080]/best'
+# OUTPUT_TEMPLATE: Template for output file names
+OUTPUT_TEMPLATE=\"%(title)s.%(ext)s\"
+# SUB_LANGS: Languages for subtitle download (comma-separated)
+SUB_LANGS=\"en,en.*\"
+# CONVERT_SUBS: Format to convert subtitles to (e.g., srt)
+CONVERT_SUBS=\"srt\"
+
+# Default flags (can be overridden)
+# FORCE_DOWNLOAD: Set to true to force re-download even if video is in archive
+FORCE_DOWNLOAD=false
+# DISABLE_ARCHIVE: Set to true to disable archive checking
+DISABLE_ARCHIVE=false
+# DOWNLOAD_PLAYLIST: Set to true to download entire playlists
+DOWNLOAD_PLAYLIST=false
+# AUTO_YES: Set to true to auto-confirm prompts
+AUTO_YES=false
+# VERBOSE: Set to true for verbose output
+VERBOSE=false
+# SHOW_YTDLP_OUTPUT: Set to true to display yt-dlp output in terminal
+SHOW_YTDLP_OUTPUT=false
+"
+
+# Embedded modules start here
+# ==============================================================================
+# lib/config.sh - Configuration Management
+# ==============================================================================
+
+# Default configuration values
+set_defaults() {
+    # Directory settings
+    DOWNLOAD_DIR="${DOWNLOAD_DIR:-${HOME}/Downloads/Videos Archive}"
+    CONFIG_DIR="${CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/vdl4k}"
+    CACHE_DIR="${CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/vdl4k}"
+    TEMP_BASE_DIR="${TEMP_BASE_DIR:-${CACHE_DIR}/temp}"
+
+    # File paths
+    LOG_FILE="${LOG_FILE:-${CACHE_DIR}/vdl4k.log}"
+    ARCHIVE_FILE="${ARCHIVE_FILE:-${CACHE_DIR}/downloaded.txt}"
+    COOKIE_FILE="${COOKIE_FILE:-${CONFIG_DIR}/cookies.txt}"
+
+    # Download settings
+    FORMAT="${FORMAT:-'bestvideo[height<=2160]+bestaudio/best[height=2160]/bestvideo[height<=1080]+bestaudio/best[height=1080]/best'}"
+    OUTPUT_TEMPLATE="${OUTPUT_TEMPLATE:-'%(title)s.%(ext)s'}"
+    SUB_LANGS="${SUB_LANGS:-'en,en.*'}"
+    CONVERT_SUBS="${CONVERT_SUBS:-'srt'}"
+
+    # Default flags
+    FORCE_DOWNLOAD="${FORCE_DOWNLOAD:-false}"
+    DISABLE_ARCHIVE="${DISABLE_ARCHIVE:-false}"
+    DOWNLOAD_PLAYLIST="${DOWNLOAD_PLAYLIST:-false}"
+    AUTO_YES="${AUTO_YES:-false}"
+    VERBOSE="${VERBOSE:-false}"
+    SHOW_YTDLP_OUTPUT="${SHOW_YTDLP_OUTPUT:-false}"
+}
+
+# Load configuration from a file or use embedded config
+load_config() {
+    local config_file="$1"
+
+    if [ -f "$config_file" ]; then
+        if [ "${VERBOSE:-false}" = true ]; then
+            print_info "Loading configuration from: $config_file"
+        fi
+
+        # Source the configuration file
+        source "$config_file" 2>/dev/null || {
+            print_warning "Failed to load configuration from: $config_file"
+            return 1
+        }
+        return 0
+    else
+        # Use embedded config if external file doesn't exist
+        if [ "${VERBOSE:-false}" = true ]; then
+            print_info "Configuration file not found: $config_file, using embedded config"
+        fi
+        eval "$EMBEDDED_CONFIG"
+        return 0
+    fi
+}
+
+# Load all configuration files in order of precedence
+load_all_configs() {
+    # 1. Set defaults first
+    set_defaults
+
+    # 2. Load default config from script directory (fallback to embedded)
+    load_config "${PROJECT_DIR}/default.conf"
+
+    # 3. Load system-wide config if it exists
+    load_config "/etc/vdl4k.conf"
+
+    # 4. Load user config from XDG directory
+    load_config "${CONFIG_DIR}/vdl4k.conf"
+
+    # 5. Load user override config (highest priority)
+    load_config "${CONFIG_DIR}/config.sh"
+
+    # 6. Apply command line overrides (these should be set by the caller)
+    # Command line arguments will override any config file settings
+}
+
+# Create user configuration directory and copy default config if needed
+setup_user_config() {
+    # Create config directory
+    ensure_dir_exists "$CONFIG_DIR" "750"
+
+    # Create cache directory
+    ensure_dir_exists "$CACHE_DIR" "750"
+
+    # Create temp directory
+    ensure_dir_exists "$TEMP_BASE_DIR" "700"
+
+    # Copy default config if user config doesn't exist
+    if [ ! -f "${CONFIG_DIR}/vdl4k.conf" ]; then
+        if [ -f "${PROJECT_DIR}/default.conf" ]; then
+            cp "${PROJECT_DIR}/default.conf" "${CONFIG_DIR}/vdl4k.conf"
+            print_info "Created user configuration file: ${CONFIG_DIR}/vdl4k.conf"
+        fi
+    fi
+
+    # Create log file if it doesn't exist
+    if [ ! -f "$LOG_FILE" ]; then
+        touch "$LOG_FILE" 2>/dev/null || print_warning "Could not create log file: $LOG_FILE"
+    fi
+
+    # Create archive file if it doesn't exist
+    if [ ! -f "$ARCHIVE_FILE" ]; then
+        touch "$ARCHIVE_FILE" 2>/dev/null || print_warning "Could not create archive file: $ARCHIVE_FILE"
+    fi
+}
+
+# Validate configuration
+validate_config() {
+    local errors=0
+
+    # Check if required directories exist or can be created
+    if ! ensure_dir_exists "$DOWNLOAD_DIR" "755" 2>/dev/null; then
+        print_error "Cannot create download directory: $DOWNLOAD_DIR"
+        ((errors++))
+    fi
+
+    # Check if required commands are available
+    if ! command_exists yt-dlp; then
+        print_error "yt-dlp is not installed or not in PATH"
+        ((errors++))
+    fi
+
+    if ! command_exists ffmpeg; then
+        print_warning "ffmpeg is not installed or not in PATH (some features may not work)"
+    fi
+
+    if ! command_exists ffprobe; then
+        print_warning "ffprobe is not installed or not in PATH (video analysis may not work)"
+    fi
+
+    if [ $errors -gt 0 ]; then
+        print_error "Configuration validation failed with $errors error(s)"
+        return 1
+    else
+        print_success "Configuration validation passed"
+        return 0
+    fi
+}
+
+# ==============================================================================
+# lib/utils.sh - Core Utilities
+# ==============================================================================
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+BOLD_MAGENTA='\033[1;35m'
+BOLD_BLUE='\033[1;34m'
+BOLD_WHITE='\033[1;37m'
+NC='\033[0m' # No Color
+
+# Print functions
+print_error() {
+    echo -e "${RED}Error: $1${NC}" >&2
+}
+
+print_success() {
+    echo -e "${GREEN}$1${NC}"
+}
+
+print_info() {
+    echo -e "${CYAN}$1${NC}"
+}
+
+print_warning() {
+    echo -e "${YELLOW}$1${NC}"
+}
+
+# Logging function with timestamps
+log() {
+    local level="$1"
+    local message="$2"
+    local log_file="${LOG_FILE:-$HOME/.cache/vdl4k/vdl4k.log}"
+
+    # Create log directory if it doesn't exist
+    mkdir -p "$(dirname "$log_file")" 2>/dev/null
+
+    case "$level" in
+        "INFO") echo -e "${CYAN}[$(date '+%H:%M:%S')] INFO: $message${NC}" ;;
+        "ERROR") echo -e "${RED}[$(date '+%H:%M:%S')] ERROR: $message${NC}" >&2 ;;
+        "WARNING") echo -e "${YELLOW}[$(date '+%H:%M:%S')] WARNING: $message${NC}" ;;
+        "SUCCESS") echo -e "${GREEN}[$(date '+%H:%M:%S')] SUCCESS: $message${NC}" ;;
+        *) echo -e "[$(date '+%H:%M:%S')] $level: $message" ;;
+    esac
+
+    # Log to file if VERBOSE is true or for errors
+    if [ "${VERBOSE:-false}" = true ] || [ "$level" = "ERROR" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $level: $message" >> "$log_file" 2>/dev/null || true
+    fi
+}
+
+# Ensure directory exists with proper permissions
+ensure_dir_exists() {
+    local dir="$1"
+    local permissions="${2:-755}"
+
+    if mkdir -p "$dir" 2>/dev/null; then
+        chmod "$permissions" "$dir" 2>/dev/null || true
+        return 0
+    else
+        print_error "Failed to create directory: $dir"
+        return 1
+    fi
+}
+
+# Check if command exists
+command_exists() {
+    local cmd="$1"
+    command -v "$cmd" >/dev/null 2>&1
+}
+
+# Get URL from clipboard using xsel
+get_url_from_clipboard() {
+    if command_exists xsel; then
+        xsel -b -o 2>/dev/null | tr -d '\n\r\t' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/\?$//;s/\\$//;s/\\?/?/g;s/\\=/=/g'
+    fi
+}
+
+# Clean up temp directory on exit
+cleanup_temp() {
+    local temp_dir="$1"
+    if [ -n "$temp_dir" ] && [ -d "$temp_dir" ]; then
+        rm -rf "$temp_dir" 2>/dev/null || true
+        if [ "${VERBOSE:-false}" = true ]; then
+            print_info "Cleaned up temp directory: $temp_dir"
+        fi
+    fi
+}
+
+# Setup temp directory with proper permissions
+setup_temp_dir() {
+    local temp_base="${TEMP_BASE_DIR:-$HOME/.cache/vdl4k-temp}"
+    local temp_dir="$temp_base/$(date +%s)"
+
+    # Clean up old temp directories (older than 1 day)
+    find "$temp_base" -maxdepth 1 -type d -mtime +1 -exec rm -rf {} \; 2>/dev/null || true
+
+    # Create base temp directory
+    ensure_dir_exists "$temp_base" "700"
+
+    # Create new temp directory
+    if ! mkdir -p "$temp_dir" 2>/dev/null; then
+        print_error "Failed to create temp directory: $temp_dir"
+        return 1
+    fi
+
+    # Set permissions
+    chmod 700 "$temp_dir" 2>/dev/null
+
+    # Verify directory is writable
+    if [ ! -w "$temp_dir" ]; then
+        print_error "Temp directory is not writable: $temp_dir"
+        return 1
+    fi
+
+    echo "$temp_dir"
+    return 0
+}
+
+# Show progress message with optional spinner
+show_progress() {
+    local message="$1"
+    local show_spinner="${2:-false}"
+
+    if [ "$show_spinner" = true ]; then
+        echo -n -e "${CYAN}$message...${NC}"
+    else
+        print_info "$message..."
+    fi
+}
+
+# Complete progress message
+complete_progress() {
+    local message="$1"
+    local success="${2:-true}"
+
+    if [ -n "$message" ]; then
+        if [ "$success" = true ]; then
+            echo -e "\r${GREEN}$message${NC}"
+        else
+            echo -e "\r${RED}$message${NC}"
+        fi
+    fi
+}
+
+# ==============================================================================
+# lib/validators.sh - Input Validation
+# ==============================================================================
+
+# Validate URL format (general HTTP/HTTPS)
+validate_url() {
+    local url="$1"
+    if [[ "$url" =~ ^https?://[^[:space:]]+$ ]]; then
+        return 0
+    fi
+    print_error "Invalid URL format: $url"
+    return 1
+}
+
+# Extract video ID from URL using grep for reliability
+extract_video_id() {
+    local url="$1"
+
+    # Extract video ID using grep
+    local video_id
+    video_id=$(echo "$url" | grep -oP '(?:v=|youtu\.be/|/embed/|/v/|/e/|/watch\?v=)([^&?/]+)' | head -1)
+
+    # If not found, try to get the last part
+    if [ -z "$video_id" ]; then
+        local last_part
+        last_part=$(echo "$url" | grep -oP '[^/]+$')
+        last_part=$(echo "$last_part" | grep -oP '^[^?&]+')
+        if [[ "$last_part" =~ ^[a-zA-Z0-9_-]{11}$ ]]; then
+            echo "$last_part"
+            return 0
+        fi
+    fi
+
+    if [ -n "$video_id" ]; then
+        echo "$video_id"
+        return 0
+    fi
+
+    echo ""
+    return 1
+}
+
+# Get video title using yt-dlp (quiet mode)
+get_video_title() {
+    local url="$1"
+    local temp_dir="$2"
+
+    if ! command_exists yt-dlp; then
+        print_error "yt-dlp is not installed or not in PATH"
+        return 1
+    fi
+
+    # Use temp directory if provided, otherwise use current directory
+    local output_dir="${temp_dir:-.}"
+
+    # Get title without downloading
+    local title
+    title=$(cd "$output_dir" && yt-dlp --get-title --no-download --ignore-config "$url" 2>/dev/null)
+
+    if [ $? -eq 0 ] && [ -n "$title" ]; then
+        echo "$title"
+        return 0
+    else
+        print_warning "Could not get video title, using fallback"
+        # Fallback: extract from URL or use generic name
+        local video_id
+        video_id=$(extract_video_id "$url")
+        if [ -n "$video_id" ]; then
+            echo "Video $video_id"
+        else
+            echo "Unknown Video"
+        fi
+        return 1
+    fi
+}
+
+# Validate video file
+validate_video_file() {
+    local file="$1"
+
+    if [ ! -f "$file" ]; then
+        print_error "File does not exist: $file"
+        return 1
+    fi
+
+    # Check if it's a video file by trying ffprobe
+    if command_exists ffprobe; then
+        if ffprobe -v error -select_streams v:0 -show_entries stream=codec_type -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | grep -q video; then
+            return 0
+        else
+            print_error "File is not a valid video file: $file"
+            return 1
+        fi
+    else
+        # Fallback: check file extension
+        case "$file" in
+            *.mp4|*.mkv|*.avi|*.mov|*.wmv|*.flv|*.webm|*.m4v)
+                return 0
+                ;;
+            *)
+                print_error "File type not recognized (no ffprobe available): $file"
+                return 1
+                ;;
+        esac
+    fi
+}
+
+# Get video duration
+get_video_duration() {
+    local file="$1"
+
+    if ! command_exists ffprobe; then
+        echo "Unknown"
+        return 1
+    fi
+
+    local duration
+    duration=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
+
+    if [ -n "$duration" ] && [ "$duration" != "N/A" ]; then
+        # Convert to human readable format
+        local hours=$(( $(echo "$duration" | cut -d'.' -f1) / 3600 ))
+        local minutes=$(( ($(echo "$duration" | cut -d'.' -f1) % 3600) / 60 ))
+        local seconds=$(( $(echo "$duration" | cut -d'.' -f1) % 60 ))
+
+        if [ $hours -gt 0 ]; then
+            printf "%02d:%02d:%02d\n" $hours $minutes $seconds
+        else
+            printf "%02d:%02d\n" $minutes $seconds
+        fi
+        return 0
+    else
+        echo "Unknown"
+        return 1
+    fi
+}
+
+# ==============================================================================
+# lib/video_utils.sh - Video Processing
+# ==============================================================================
+
+# Get video resolution from file using ffprobe
+get_video_resolution() {
+    local file="$1"
+
+    if [ ! -f "$file" ]; then
+        echo "0x0"
+        return 1
+    fi
+
+    # Try to get both width and height
+    local resolution
+    resolution=$(ffprobe -v error -select_streams v:0 \
+              -show_entries stream=width,height \
+              -of csv=s=x:p=0 "$file" 2>/dev/null)
+
+    # Clean the resolution string
+    resolution=$(echo "$resolution" | tr -d ' ')
+
+    if [ -z "$resolution" ] || ! [[ "$resolution" =~ ^[0-9]+x[0-9]+$ ]]; then
+        # Fallback to just height if widthxheight format fails
+        resolution="0x$(ffprobe -v error -select_streams v:0 \
+                   -show_entries stream=height \
+                   -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | tr -d ' ' || echo "0")"
+    fi
+
+    echo "$resolution"
+}
+
+# Calculate total pixels from resolution (WxH)
+calculate_pixels() {
+    local resolution="$1"
+    local width=$(echo "$resolution" | cut -d'x' -f1)
+    local height=$(echo "$resolution" | cut -d'x' -f2)
+
+    # Validate that width and height are numbers
+    if ! [[ "$width" =~ ^[0-9]+$ ]] || ! [[ "$height" =~ ^[0-9]+$ ]]; then
+        echo "0"
+        return 1
+    fi
+
+    echo $((width * height))
+}
+
+# Compare and keep higher resolution file
+compare_and_keep_higher_res() {
+    local file1="$1"
+    local file2="$2"
+
+    # Get resolutions
+    local res1 res2
+    res1=$(get_video_resolution "$file1")
+    res2=$(get_video_resolution "$file2")
+
+    # Calculate pixels for comparison
+    local pixels1 pixels2
+    pixels1=$(calculate_pixels "$res1")
+    pixels2=$(calculate_pixels "$res2")
+
+    print_info "Comparing resolutions:"
+    print_info "  $file1: $res1 (${pixels1} pixels)"
+    print_info "  $file2: $res2 (${pixels2} pixels)"
+
+    if [ $pixels1 -gt $pixels2 ]; then
+        print_success "New file has higher resolution. Replacing..."
+        mv -f "$file1" "$file2"
+        return 0
+    elif [ $pixels1 -eq $pixels2 ]; then
+        print_warning "Resolutions are equal. Keeping existing."
+        rm -f "$file1"
+        return 1
+    else
+        print_warning "Existing file has higher resolution. Keeping existing."
+        rm -f "$file1"
+        return 1
+    fi
+}
+
+# Get file size in human readable format
+get_file_size() {
+    local file="$1"
+
+    if [ ! -f "$file" ]; then
+        echo "0 B"
+        return 1
+    fi
+
+    du -h "$file" 2>/dev/null | cut -f1
+}
+
+# Check if video file is corrupted
+is_video_corrupted() {
+    local file="$1"
+
+    if ! command_exists ffprobe; then
+        # Fallback: check if file size is reasonable (>1MB)
+        local size
+        size=$(du -b "$file" 2>/dev/null | cut -f1)
+        [ "$size" -lt 1048576 ] 2>/dev/null && return 0
+        return 1
+    fi
+
+    # Try to read video stream info
+    if ffprobe -v error -select_streams v:0 \
+               -show_entries stream=duration \
+               -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | grep -q "^[0-9]"; then
+        return 1  # Not corrupted
+    else
+        return 0  # Corrupted
+    fi
+}
+
+# ==============================================================================
+# lib/archive.sh - Download History
+# ==============================================================================
+
+# Check if video is in archive
+is_video_in_archive() {
+    local video_id="$1"
+    local archive_file="${ARCHIVE_FILE:-$HOME/.cache/vdl4k/downloaded.txt}"
+
+    [ -f "$archive_file" ] && grep -q "^${video_id}$" "$archive_file" 2>/dev/null
+}
+
+# Add video to archive
+add_to_archive() {
+    local video_id="$1"
+    local archive_file="${ARCHIVE_FILE:-$HOME/.cache/vdl4k/downloaded.txt}"
+
+    if [ -z "$video_id" ]; then
+        print_warning "Cannot add empty video ID to archive"
+        return 1
+    fi
+
+    # Create archive directory if it doesn't exist
+    ensure_dir_exists "$(dirname "$archive_file")" "750"
+
+    # Add to archive if not already present
+    if ! is_video_in_archive "$video_id"; then
+        echo "$video_id" >> "$archive_file"
+
+        # Keep archive file clean by removing duplicates and empty lines
+        if [ -f "$archive_file" ]; then
+            # Remove duplicates, empty lines, and sort
+            sort -u -o "$archive_file" "$archive_file" 2>/dev/null || true
+            sed -i '/^$/d' "$archive_file" 2>/dev/null || true
+        fi
+
+        if [ "${VERBOSE:-false}" = true ]; then
+            print_info "$(date '+%H:%M:%S'): Added $video_id to archive"
+        fi
+        return 0
+    else
+        if [ "${VERBOSE:-false}" = true ]; then
+            print_info "$(date '+%H:%M:%S'): Video $video_id already in archive"
+        fi
+        return 1
+    fi
+}
+
+# Get archive statistics
+get_archive_stats() {
+    local archive_file="${ARCHIVE_FILE:-$HOME/.cache/vdl4k/downloaded.txt}"
+
+    if [ ! -f "$archive_file" ]; then
+        echo "0 videos in archive"
+        return 1
+    fi
+
+    local count
+    count=$(wc -l < "$archive_file" 2>/dev/null || echo "0")
+
+    if [ "$count" -eq 1 ]; then
+        echo "$count video in archive"
+    else
+        echo "$count videos in archive"
+    fi
+
+    return 0
+}
+
+# ==============================================================================
+# lib/download.sh - Download Operations
+# ==============================================================================
+
+# Check if video is available (not private/deleted)
+check_video_availability() {
+    local url="$1"
+
+    if ! command_exists yt-dlp; then
+        print_error "yt-dlp is not installed or not in PATH"
+        return 1
+    fi
+
+    # Try to get basic info without downloading
+    if yt_dlp_output=$(yt-dlp --no-download --ignore-config --print-json "$url" 2>/dev/null); then
+        # Check if video is private or deleted
+        if echo "$yt_dlp_output" | grep -q -i "private\|deleted\|not available"; then
+            print_warning "Video may be private, deleted, or not available"
+            return 1
+        fi
+        return 0
+    else
+        print_error "Video is not accessible"
+        return 1
+    fi
+}
+
+# Execute video download using yt-dlp
+download_video() {
+    local url="$1"
+    local temp_dir="$2"
+    local output_dir="${3:-$temp_dir}"
+
+    if ! command_exists yt-dlp; then
+        print_error "yt-dlp is not installed or not in PATH"
+        return 1
+    fi
+
+    # Change to temp directory for download
+    cd "$temp_dir" || {
+        print_error "Failed to change to temp directory: $temp_dir"
+        return 1
+    }
+
+    # Build yt-dlp command
+    local yt_dlp_cmd=(
+        yt-dlp
+        --verbose
+        --ignore-config
+        --format "$FORMAT"
+        --merge-output-format mkv
+        --no-embed-thumbnail
+        --embed-subs
+        --sub-langs "$SUB_LANGS"
+        --convert-subs "$CONVERT_SUBS"
+        --restrict-filenames
+        --no-warnings
+    )
+
+    # Add ffmpeg location if available
+    if command_exists ffmpeg; then
+        yt_dlp_cmd+=(--ffmpeg-location "$(which ffmpeg)")
+    fi
+
+    # Add output template
+    yt_dlp_cmd+=(--output "./${OUTPUT_TEMPLATE}")
+
+    # Handle playlists
+    if [ "${DOWNLOAD_PLAYLIST:-false}" = true ]; then
+        yt_dlp_cmd+=(--yes-playlist)
+        print_info "Downloading entire playlist..."
+    else
+        yt_dlp_cmd+=(--no-playlist)
+    fi
+
+    # Add cookies if available
+    if [ -f "${COOKIE_FILE:-}" ]; then
+        yt_dlp_cmd+=(--cookies "$COOKIE_FILE")
+    fi
+
+    # Add URL
+    yt_dlp_cmd+=("$url")
+
+    # Show command if verbose
+    if [ "${VERBOSE:-false}" = true ]; then
+        print_info "Executing yt-dlp command:"
+        printf '  %s\n' "${yt_dlp_cmd[@]}"
+    fi
+
+    # Execute download and capture output
+    local output
+    local exit_code
+
+    if [ "${SHOW_YTDLP_OUTPUT:-false}" = true ]; then
+        # Show output in real-time
+        "${yt_dlp_cmd[@]}"
+        exit_code=$?
+    else
+        # Capture output for processing
+        output=$("${yt_dlp_cmd[@]}" 2>&1)
+        exit_code=$?
+
+        # Show output if requested or if there was an error
+        if [ $exit_code -ne 0 ] || [ "${VERBOSE:-false}" = true ]; then
+            echo "$output"
+        fi
+    fi
+
+    if [ $exit_code -eq 0 ]; then
+        if [ "${VERBOSE:-false}" = true ]; then
+            print_success "Download completed successfully"
+        fi
+        echo "$output"
+        return 0
+    else
+        print_error "Download failed with exit code: $exit_code"
+        if [ -n "$output" ]; then
+            print_error "yt-dlp output:"
+            echo "$output"
+        fi
+        return $exit_code
+    fi
+}
+
+# Process downloaded file
+process_downloaded_file() {
+    local temp_dir="$1"
+    local download_dir="$2"
+
+    if [ "${VERBOSE:-false}" = true ]; then
+        print_info "Processing downloaded files in: $temp_dir"
+        print_info "Directory contents:"
+        ls -la "$temp_dir" 2>/dev/null | sed 's/^/  /' || true
+    fi
+
+    # Look for video files (exclude subtitle files)
+    local video_file
+    video_file=$(find "$temp_dir" -type f \( \
+        -name "*.mp4" -o \
+        -name "*.mkv" -o \
+        -name "*.avi" -o \
+        -name "*.mov" -o \
+        -name "*.wmv" -o \
+        -name "*.flv" -o \
+        -name "*.webm" -o \
+        -name "*.m4v" \
+    \) | head -1)
+
+    if [ -z "$video_file" ]; then
+        print_error "No video file found in temp directory"
+        print_error "Contents of $temp_dir:"
+        ls -la "$temp_dir" 2>/dev/null || true
+
+        # Check if yt-dlp saved the file elsewhere
+        if command_exists yt-dlp; then
+            local expected_output
+            expected_output=$(yt-dlp --get-filename -o "%(title)s.%(ext)s" "$URL" 2>/dev/null)
+            if [ -f "$expected_output" ]; then
+                print_info "Found file in current directory: $expected_output"
+                mv -v "$expected_output" "$temp_dir/"
+                video_file="$temp_dir/$(basename "$expected_output")"
+            fi
+        fi
+
+        if [ -z "$video_file" ]; then
+            return 1
+        fi
+    fi
+
+    if [ "${VERBOSE:-false}" = true ]; then
+        print_info "Found video file: $video_file"
+    fi
+
+    # Validate the video file
+    if ! validate_video_file "$video_file"; then
+        print_error "Downloaded file is not a valid video file"
+        return 1
+    fi
+
+    # Get file information
+    local filename
+    filename=$(basename "$video_file")
+    local target_file="$download_dir/$filename"
+
+    # Check if file already exists and compare quality
+    local kept="new"
+    if [ -f "$target_file" ]; then
+        if [ "${VERBOSE:-false}" = true ]; then
+            print_info "Existing file found, comparing quality..."
+        fi
+
+        if compare_and_keep_higher_res "$video_file" "$target_file"; then
+            kept="new"
+        else
+            kept="existing"
+        fi
+    else
+        # Move new file to download directory
+        if mv "$video_file" "$target_file"; then
+            if [ "${VERBOSE:-false}" = true ]; then
+                print_success "Moved file to: $target_file"
+            fi
+        else
+            print_error "Failed to move file to download directory"
+            print_error "Source: $video_file"
+            print_error "Target: $target_file"
+            ls -la "$(dirname "$target_file")" 2>/dev/null || true
+            return 1
+        fi
+    fi
+
+    # Return the target file path
+    echo "$target_file"
+    return 0
+}
+
+# End of embedded modules
+# ==============================================================================
+
+# Script metadata
+readonly SCRIPT_NAME="vdl4k"
+readonly SCRIPT_VERSION="0.56"
+
+# Trap for cleanup on exit
+cleanup() {
+    if [ -n "${TEMP_DIR:-}" ] && [ -d "$TEMP_DIR" ]; then
+        cleanup_temp "$TEMP_DIR"
+    fi
+}
+trap cleanup EXIT INT TERM
+
+# Show help message
+show_help() {
+    # Load basic config for display
+    set_defaults
+    load_config "${PROJECT_DIR}/default.conf"
+
+    echo -e "${GREEN}Usage: $0 [OPTIONS] [URL]${NC}"
+    echo "Download videos with yt-dlp using modular architecture"
+    echo
+    echo "Options:"
+    echo "  -d, --dir DIR      Set download directory (default: ${DOWNLOAD_DIR:-$HOME/Downloads/Videos Archive})"
+    echo "  -p, --playlist     Download playlist instead of single video"
+    echo "  -f, --force        Force re-download even if video is in archive"
+    echo "  -t, --no-tracking  Disable download tracking (no archive updates)"
+    echo "  -v, --verbose      Enable verbose output with timestamps"
+    echo "  -s, --show-yt-dlp  Show yt-dlp output during download"
+    echo "  -y, --yes          Automatically answer yes to all prompts"
+    echo "  -c, --config       Show current configuration"
+    echo "  -h, --help         Show this help message and exit"
+    echo
+    echo "Configuration:"
+    echo "  Default config: ${PROJECT_DIR}/default.conf"
+    echo "  User config: ${CONFIG_DIR:-$HOME/.config/vdl4k}/vdl4k.conf (created on first run)"
+    echo "  Override config: ${CONFIG_DIR:-$HOME/.config/vdl4k}/config.sh"
+    exit 0
+}
+
+# Show configuration
+show_config() {
+    # Load basic config for display
+    set_defaults
+    load_config "${PROJECT_DIR}/default.conf"
+
+    print_info "Current Configuration:"
+    echo "  Download Directory: ${DOWNLOAD_DIR:-$HOME/Downloads/Videos Archive}"
+    echo "  Config Directory: ${CONFIG_DIR:-$HOME/.config/vdl4k}"
+    echo "  Cache Directory: ${CACHE_DIR:-$HOME/.cache/vdl4k}"
+    echo "  Log File: ${LOG_FILE:-$HOME/.cache/vdl4k/vdl4k.log}"
+    echo "  Archive File: ${ARCHIVE_FILE:-$HOME/.cache/vdl4k/downloaded.txt}"
+    echo "  Cookie File: ${COOKIE_FILE:-$HOME/.config/vdl4k/cookies.txt}"
+    echo "  Format: ${FORMAT:-'bestvideo[height<=2160]+bestaudio/best[height=2160]/bestvideo[height<=1080]+bestaudio/best[height=1080]/best'}"
+    echo "  Output Template: ${OUTPUT_TEMPLATE:-'%(title)s.%(ext)s'}"
+    echo "  Subtitle Languages: ${SUB_LANGS:-'en,en.*'}"
+    echo "  Convert Subs: ${CONVERT_SUBS:-'srt'}"
+    echo "  Force Download: ${FORCE_DOWNLOAD:-false}"
+    echo "  Disable Archive: ${DISABLE_ARCHIVE:-false}"
+    echo "  Download Playlist: ${DOWNLOAD_PLAYLIST:-false}"
+    echo "  Auto Yes: ${AUTO_YES:-false}"
+    echo "  Verbose: ${VERBOSE:-false}"
+    echo "  Show yt-dlp Output: ${SHOW_YTDLP_OUTPUT:-false}"
+    exit 0
+}
+
+# Main function
+main() {
+    # Parse command line arguments
+    local force_download=false
+    local disable_archive=false
+    local download_playlist=false
+    local auto_yes=false
+    local verbose=false
+    local show_ytdlp_output=false
+    local url=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -d|--dir) DOWNLOAD_DIR="$2"; shift 2 ;;
+            -p|--playlist) download_playlist=true; shift ;;
+            -f|--force) force_download=true; shift ;;
+            -t|--no-tracking) disable_archive=true; shift ;;
+            -v|--verbose) verbose=true; shift ;;
+            -s|--show-yt-dlp) show_ytdlp_output=true; shift ;;
+            -y|--yes) auto_yes=true; shift ;;
+            -c|--config) show_config ;;
+            -h|--help) show_help ;;
+            --) shift; break ;;
+            -*) print_error "Unknown option: $1"; show_help ;;
+            *) url="$1"; shift ;;
+        esac
+    done
+
+    # Export variables for modules to use
+    export FORCE_DOWNLOAD="$force_download"
+    export DISABLE_ARCHIVE="$disable_archive"
+    export DOWNLOAD_PLAYLIST="$download_playlist"
+    export AUTO_YES="$auto_yes"
+    export VERBOSE="$verbose"
+    export SHOW_YTDLP_OUTPUT="$show_ytdlp_output"
+
+    # Setup user configuration
+    setup_user_config
+
+    # Validate configuration
+    if ! validate_config; then
+        print_error "Configuration validation failed"
+        exit 1
+    fi
+
+    # Get URL from arguments or interactive input
+    if [ -z "$url" ] && [ -t 0 ]; then
+        local clipboard_url
+        clipboard_url=$(get_url_from_clipboard)
+
+        if [ -n "$clipboard_url" ]; then
+            echo "Clipboard content: $clipboard_url"
+            if validate_url "$clipboard_url"; then
+                url="$clipboard_url"
+                if [ "$verbose" = true ]; then
+                    print_info "Using URL from clipboard"
+                fi
+            else
+                read -p "Enter URL: " url
+            fi
+        else
+            read -p "Enter URL: " url
+        fi
+    fi
+
+    # Validate URL
+    if ! validate_url "$url"; then
+        exit 1
+    fi
+
+    # Extract video ID
+    local video_id
+    video_id=$(extract_video_id "$url")
+    if [ -z "$video_id" ]; then
+        video_id=$(echo "$url" | md5sum | cut -d' ' -f1)
+        print_warning "Could not extract video ID, using hash: $video_id"
+    fi
+
+    # Check if video is already in archive
+    local was_in_archive=false
+    if [ "$disable_archive" = false ] && is_video_in_archive "$video_id"; then
+        was_in_archive=true
+        print_warning "This video is already in your download archive"
+
+        if [ "$auto_yes" = false ] && [ -t 0 ]; then
+            read -p "Re-download? [y/N] " -n 1 -r
+            echo
+            [[ ! $REPLY =~ ^[Yy]$ ]] && exit 0
+        fi
+    fi
+
+    # Setup temp directory
+    TEMP_DIR=$(setup_temp_dir)
+    if [ $? -ne 0 ]; then
+        print_error "Failed to setup temp directory"
+        exit 1
+    fi
+
+    if [ "$verbose" = true ]; then
+        print_info "Using temp directory: $TEMP_DIR"
+    fi
+
+    # Check video availability before download
+    if ! check_video_availability "$url"; then
+        print_warning "Video may not be available or accessible"
+        if [ "$auto_yes" = false ] && [ -t 0 ]; then
+            read -p "Continue anyway? [y/N] " -n 1 -r
+            echo
+            [[ ! $REPLY =~ ^[Yy]$ ]] && exit 0
+        fi
+    fi
+
+    # Execute download
+    show_progress "Starting download"
+    local download_output
+    download_output=$(download_video "$url" "$TEMP_DIR")
+    local download_exit_code=$?
+
+    if [ $download_exit_code -ne 0 ]; then
+        print_error "Download failed with exit code: $download_exit_code"
+        complete_progress "Download failed" false
+        exit $download_exit_code
+    fi
+
+    complete_progress "Download completed" true
+
+    # Process downloaded file
+    show_progress "Processing downloaded file"
+    local target_file
+    target_file=$(process_downloaded_file "$TEMP_DIR" "$DOWNLOAD_DIR")
+
+    if [ $? -ne 0 ] || [ -z "$target_file" ]; then
+        print_error "Failed to process downloaded file"
+        exit 1
+    fi
+
+    complete_progress "File processed" true
+
+    # Get video title for summary
+    local video_title
+    video_title=$(get_video_title "$url" "$TEMP_DIR")
+    if [ $? -ne 0 ]; then
+        video_title="Unknown Video"
+    fi
+
+    # Get final file information
+    local final_size
+    local final_resolution
+    final_size=$(get_file_size "$target_file")
+    final_resolution=$(get_video_resolution "$target_file")
+
+    if [[ "$final_resolution" == "0x0" ]]; then
+        print_warning "Could not determine video resolution"
+        final_resolution="Unknown"
+    fi
+
+    # Add to archive if not disabled
+    if [ "$disable_archive" = false ]; then
+        add_to_archive "$video_id"
+    fi
+
+    # Generate summary
+    show_download_summary "$url" "$video_title" "$target_file" "$final_size" "$final_resolution" "$was_in_archive"
+
+    print_success "Download completed successfully"
+    exit 0
+}
+
+# Show download summary
+show_download_summary() {
+    local url="$1"
+    local title="$2"
+    local file_path="$3"
+    local file_size="$4"
+    local resolution="$5"
+    local was_in_archive="$6"
+
+    echo
+    echo -e "${CYAN}========================================${NC}"
+    print_info "=== DOWNLOAD SUMMARY ==="
+    echo -e "${BOLD_MAGENTA}• Source${NC}"
+    print_info "  - URL: $url"
+    print_info "  - Title: $title"
+    print_info "  - Download Date: $(date '+%Y-%m-%d %H:%M:%S')"
+    print_info "  - Previously Downloaded: $(if [ "$was_in_archive" = true ]; then echo "Yes"; else echo "No"; fi)"
+    echo
+    echo -e "${BOLD_BLUE}• File Information${NC}"
+    print_info "  Resolution: $resolution"
+    print_info "  File Size: $file_size"
+    print_info "  Subtitles: Embedded ($SUB_LANGS)"
+    print_info "  Location: $file_path"
+    echo -e "${CYAN}========================================${NC}"
+
+    # Log to file
+    {
+        echo "$(date '+%Y-%m-%d %H:%M:%S'): Downloaded '$title' from $url"
+        echo "  Final: $file_size, $resolution at $file_path"
+        echo "  Archive: $(if [ "$was_in_archive" = true ]; then echo "Previously downloaded"; else echo "New"; fi)"
+        echo ""
+    } >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# Run main function with all arguments
+main "$@"

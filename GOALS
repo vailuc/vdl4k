@@ -1,0 +1,23 @@
+# vdl4k Project Structure and Goals
+
+## Code Structure
+```
+vdl4k/
+├── bin/
+│   └── vdl4k          # Main executable
+├── lib/
+│   ├── utils.sh         # Core utilities
+│   ├── validators.sh    # URL/input validation  
+│   └── video_utils.sh   # Video processing
+├── config/
+│   └── default.conf     # Configuration template
+└── doc/
+    └── manual.md        # Documentation
+```
+
+## Project Goals
+1. Modular architecture
+2. Easy configuration
+3. 4K video support
+4. Batch processing
+5. Comprehensive logging
