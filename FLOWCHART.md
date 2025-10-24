@@ -104,12 +104,12 @@ graph LR
 
 ## Key Improvements in v0.57
 
-1. **Global Installation System**: One-command setup with intelligent module detection
-2. **PATH Integration**: Automatic shell configuration for seamless command access
-3. **Smart Wrapper Scripts**: Auto-locate project modules from anywhere on the system
-4. **Enhanced User Experience**: Zero-configuration installation with dependency checking
-5. **Cross-Shell Compatibility**: Works with both bash and zsh environments
-6. **Comprehensive Documentation**: Updated installation flows and usage examples
+1. **XDG Base Directory Compliance**: Uses `~/.local/bin` following Linux standards
+2. **Enhanced PATH Management**: Improved shell integration with duplicate prevention
+3. **Robust Project Detection**: Multiple fallback methods for finding project modules
+4. **Cross-Shell Compatibility**: Seamless support for both bash and zsh environments
+5. **Standard Installation Paths**: Follows XDG Base Directory specification
+6. **Professional Installation Experience**: One-command setup with comprehensive error handling
 
 ## Installation Flow
 
