@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # vdl4k - YouTube Downloader with 4K support
-# Version: 0.56
+# Version: 0.57
 # Modular architecture with separate utility modules
 
 # Set strict bash options

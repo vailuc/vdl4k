@@ -2,7 +2,7 @@
 
 ```mermaid
 graph TD
-    A[vdl4k-v0.56] --> B[Initialization & Configuration]
+    A[vdl4k-v0.57] --> B[Initialization & Configuration]
     A --> C[Modular Components]
     A --> D[Main Execution Flow]
     A --> E[Entry Point]
@@ -102,26 +102,60 @@ graph LR
     G --> Z[Download Management]
 ```
 
-## Key Improvements in v0.56
+## Key Improvements in v0.57
 
-1. **Modular Architecture**: Separated concerns into focused modules
-2. **Configuration Management**: Robust config loading with precedence
-3. **Enhanced Validation**: Comprehensive input and dependency validation
-4. **Better Error Handling**: Improved error reporting and recovery
-5. **Security**: Proper file permissions and temp directory management
-6. **Maintainability**: Clear separation of responsibilities
+1. **Global Installation System**: One-command setup with intelligent module detection
+2. **PATH Integration**: Automatic shell configuration for seamless command access
+3. **Smart Wrapper Scripts**: Auto-locate project modules from anywhere on the system
+4. **Enhanced User Experience**: Zero-configuration installation with dependency checking
+5. **Cross-Shell Compatibility**: Works with both bash and zsh environments
+6. **Comprehensive Documentation**: Updated installation flows and usage examples
+
+## Installation Flow
+
+```mermaid
+graph TD
+    A[User Downloads vdl4k] --> B[Clone Repository]
+    B --> C[Run ./install.sh]
+    C --> D[Check Dependencies: yt-dlp, ffmpeg, ffprobe]
+    D --> E{Create ~/bin Directory?}
+    E -->|No| F[Skip]
+    E -->|Yes| G[Create ~/bin Directory]
+    G --> H[Update PATH in .bashrc/.zshrc]
+    H --> I[Install Global Wrapper Script]
+    I --> J[Install Portable Version to ~/bin/]
+    J --> K[Verify Installation]
+    K --> L[Installation Complete]
+
+    style I fill:#bbf,stroke:#333,stroke-width:2px
+```
+
+## Post-Installation Usage
+
+```mermaid
+graph TD
+    A[User runs: vdl4k] --> B[Wrapper detects project location]
+    B --> C[Load modules from project lib/]
+    C --> D[Execute download with full functionality]
+    D --> E[Configuration in ~/.config/vdl4k/]
+    E --> F[Downloads to ~/Downloads/Videos Archive]
+
+    F --> G[Archive tracking in ~/.cache/vdl4k/]
+    G --> H[Complete with summary and logging]
+```
 
 ## Configuration Flow
 
 ```mermaid
 graph TD
-    A[Start] --> B[Set Defaults]
-    B --> C[Load default.conf]
-    C --> D[Load System Config /etc/vdl4k.conf]
-    D --> E[Load User Config ~/.config/vdl4k/vdl4k.conf]
-    E --> F[Load Override Config ~/.config/vdl4k/config.sh]
-    F --> G[Apply Command Line Overrides]
-    G --> H[Validate Configuration]
-    H --> I[Create Missing Directories]
-    I --> J[Ready for Use]
+    A[First Run] --> B[Check ~/.config/vdl4k/]
+    B --> C{Directory Exists?}
+    C -->|No| D[Create ~/.config/vdl4k/]
+    C -->|Yes| E[Load Existing Config]
+    D --> F[Copy default.conf to vdl4k.conf]
+    F --> G[Create cache directories]
+    G --> H[Create log and archive files]
+    E --> I[Load User Configuration]
+    I --> J[Apply Command Line Overrides]
+    J --> K[Ready for Use]
 ```

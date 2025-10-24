@@ -1,6 +1,6 @@
 # vdl4k
 
-A robust YouTube/other video downloader with 4K support built with a modular architecture. The goal of this script is to archive videos seen on a page for personal use, providing an easy way to download and organize high-quality videos while maintaining a download history and supporting batch processing.
+A robust YouTube/4K video downloader with modular architecture and global installation system. The goal of this script is to archive videos for personal use, providing an easy way to download and organize high-quality videos while maintaining a download history and supporting batch processing.
 
 ## Features
 - 4K video support with fallback options
@@ -11,17 +11,19 @@ A robust YouTube/other video downloader with 4K support built with a modular arc
 - Configurable settings
 - Modular architecture with separate utility modules
 - Robust error handling and validation
+- **Global installation system with smart module detection**
+- **One-command setup with dependency checking**
 
 ## Architecture
 vdl4k is built with a modular architecture consisting of:
 
 - **bin/vdl4k**: Main executable script
-- **lib/utils.sh**: Core utilities and helper functions
 - **lib/validators.sh**: URL and input validation
 - **lib/video_utils.sh**: Video processing functions
 - **lib/archive.sh**: Download history management
 - **lib/download.sh**: Video download and processing
 - **lib/config.sh**: Configuration management
+- **install.sh**: Global installation system with smart path detection
 
 ## Installation
 
@@ -32,11 +34,41 @@ Ensure the following tools are installed on your system:
 - **ffprobe**: Included with ffmpeg
 - **xsel** (optional): For clipboard support on Linux (install via `sudo apt install xsel`)
 
-### Quick Install
+### Quick Install (Recommended)
 1. Clone the repository: `git clone <repository-url>`
 2. Navigate to the project directory: `cd vdl4k`
 3. Run the installation script: `./install.sh`
-4. Make scripts executable: `make install` or `chmod +x bin/vdl4k vdl4k-portable`
+4. **Done!** vdl4k is now available globally as `vdl4k` and `vdl4k-portable`
+
+The installation script will:
+- ✅ Create `~/bin` directory if it doesn't exist
+- ✅ Add `~/bin` to your PATH (in `.bashrc` and `.zshrc`)
+- ✅ Install both versions globally
+- ✅ Check dependencies
+- ✅ Make scripts executable
+
+**After installation, restart your terminal or run:**
+```bash
+source ~/.bashrc
+```
+
+**Now you can use vdl4k from anywhere:**
+```bash
+vdl4k --help
+vdl4k <YouTube_URL>
+vdl4k-portable <YouTube_URL>
+```
+
+### Manual Installation
+If you prefer to install manually:
+
+1. Clone the repository: `git clone <repository-url>`
+2. Navigate to the project directory: `cd vdl4k`
+3. Create local bin directory: `mkdir -p ~/bin`
+4. Copy scripts: `cp bin/vdl4k ~/bin/` and `cp vdl4k-portable ~/bin/`
+5. Make executable: `chmod +x ~/bin/vdl4k ~/bin/vdl4k-portable`
+6. Add to PATH: `echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc`
+7. Restart terminal or: `source ~/.bashrc`
 
 ### Configuration
 The configuration system automatically creates necessary directories on first run.
@@ -52,41 +84,58 @@ To modify configuration:
 
 ## Usage
 ```bash
-# Basic download
-./bin/vdl4k https://youtu.be/VIDEO_ID
+# After installation, use from anywhere:
+vdl4k https://youtu.be/VIDEO_ID
 
 # Download with custom directory
-./bin/vdl4k -d /path/to/downloads https://youtu.be/VIDEO_ID
+vdl4k -d /path/to/downloads https://youtu.be/VIDEO_ID
 
 # Download playlist
-./bin/vdl4k -p https://youtube.com/playlist?list=PLAYLIST_ID
+vdl4k -p https://youtube.com/playlist?list=PLAYLIST_ID
 
 # Force re-download (ignore archive)
-./bin/vdl4k -f https://youtu.be/VIDEO_ID
+vdl4k -f https://youtu.be/VIDEO_ID
 
 # Verbose output with yt-dlp details
-./bin/vdl4k -v -s https://youtu.be/VIDEO_ID
+vdl4k -v -s https://youtu.be/VIDEO_ID
 
 # Show current configuration
-./bin/vdl4k --config
+vdl4k --config
 
 # Show help
-./bin/vdl4k --help
+vdl4k --help
+
+# Or use the portable version:
+vdl4k-portable https://youtu.be/VIDEO_ID
+vdl4k-portable --help
 ```
+
+## What's New in v0.57
+
+🚀 **Global Installation System** - Run `./install.sh` once and use `vdl4k` from anywhere on your system!
+
+- ✅ **One-Command Installation**: `./install.sh` handles everything automatically
+- ✅ **Global PATH Integration**: Adds `~/bin` to your shell configuration
+- ✅ **Smart Module Detection**: Automatically finds and loads project modules
+- ✅ **Dual Global Access**: Both modular and portable versions available globally
+- ✅ **Dependency Checking**: Verifies yt-dlp, ffmpeg, and ffprobe are installed
+- ✅ **Cross-Shell Support**: Works with both bash and zsh
 
 ## Two Versions Available
 
-### Modular Version (`bin/vdl4k`)
+### Modular Version (`vdl4k`)
 - **Recommended for development and customization**
 - Multi-file structure with separate modules
 - Easier to maintain and extend
 - Requires full project structure
+- **Available globally** after running `./install.sh`
 
 ### Portable Version (`vdl4k-portable`)
 - **Recommended for end users and distribution**
 - Single self-contained executable
 - All modules embedded in one file
 - Perfect for sharing and deployment
+- **Available globally** after running `./install.sh`
 
 ## Configuration Options
 | Option | Description | Default |
@@ -116,6 +165,11 @@ vdl4k/
 ├── Makefile          # Development tasks
 ├── install.sh        # Installation script
 └── vdl4k-portable    # Portable single-file version
+
+# After installation with ./install.sh:
+~/bin/
+├── vdl4k            # Global modular version
+└── vdl4k-portable   # Global portable version
 ```
 
 ## Development
@@ -126,12 +180,43 @@ make test
 # Clean temporary files
 make clean
 
+# Setup for development
+make install
+
 # Show help
 make help
 ```
 
+**For Users:**
+```bash
+# Simple installation
+./install.sh
+
+# Now use from anywhere
+vdl4k --help
+vdl4k <URL>
+```
+
 ## Version
-v0.56
+v0.57
+
+## Changelog
+
+### v0.57 (Latest)
+- ✨ **Global Installation System**: Added comprehensive installation script that installs vdl4k globally
+- 🏠 **Smart PATH Integration**: Automatically adds `~/bin` to user PATH in `.bashrc` and `.zshrc`
+- 🔍 **Intelligent Module Detection**: Wrapper script automatically locates project modules from anywhere
+- 📁 **Enhanced Project Structure**: Updated documentation to reflect global installation workflow
+- 🚀 **Improved User Experience**: One-command installation with dependency checking
+- 📚 **Updated Documentation**: Enhanced README and flowcharts with installation flows
+
+### v0.56
+- 🏗️ **Complete Modular Architecture**: Refactored monolithic script into 6 specialized modules
+- 📦 **Dual Deployment Options**: Both modular (development) and portable (single-file) versions
+- ⚙️ **Advanced Configuration System**: Multi-tier configuration with precedence handling
+- 🛡️ **Enhanced Error Handling**: Comprehensive validation and error reporting
+- 📖 **Professional Documentation**: Complete README, architecture flowcharts, and development guides
+- 🧪 **Automated Testing**: Makefile-based testing and development workflows
 
 ## License
 MIT

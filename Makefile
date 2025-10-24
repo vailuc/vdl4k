@@ -19,7 +19,8 @@ install:
 	@chmod +x vdl4k-portable
 	@chmod +x install.sh
 	@echo "✓ Scripts made executable"
-	@echo "Run './install.sh' for full setup"
+	@echo "Run './install.sh' for full system installation"
+	@echo "Or install manually: cp bin/vdl4k ~/bin/ && cp vdl4k-portable ~/bin/"
 
 clean:
 	@echo "Cleaning up temporary files..."
