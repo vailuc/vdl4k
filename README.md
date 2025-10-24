@@ -49,7 +49,9 @@ The installation script will:
 
 **After installation, restart your terminal or run:**
 ```bash
-source ~/.bashrc
+source ~/.bashrc  # If using bash
+# OR
+source ~/.zshrc   # If using zsh
 ```
 
 **Now you can use vdl4k from anywhere:**
@@ -67,8 +69,8 @@ If you prefer to install manually:
 3. Create local bin directory: `mkdir -p ~/bin`
 4. Copy scripts: `cp bin/vdl4k ~/bin/` and `cp vdl4k-portable ~/bin/`
 5. Make executable: `chmod +x ~/bin/vdl4k ~/bin/vdl4k-portable`
-6. Add to PATH: `echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc`
-7. Restart terminal or: `source ~/.bashrc`
+6. Add to PATH: `echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc` (or `~/.zshrc` if using zsh)
+7. Restart terminal or: `source ~/.bashrc` (or `source ~/.zshrc`)
 
 ### Configuration
 The configuration system automatically creates necessary directories on first run.

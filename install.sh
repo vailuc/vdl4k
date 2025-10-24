@@ -33,10 +33,25 @@ fi
 if ! echo "$PATH" | grep -q "$LOCAL_BIN"; then
     echo
     echo "Adding $LOCAL_BIN to your PATH..."
-    echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
-    echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc 2>/dev/null || true
-    echo "✓ Added $LOCAL_BIN to PATH in shell configuration files"
-    echo "⚠️  Please restart your terminal or run: source ~/.bashrc"
+
+    # Add to bashrc if it exists
+    if [ -f ~/.bashrc ]; then
+        # Remove any existing vdl4k PATH entries to avoid duplicates
+        sed -i '/export PATH.*bin.*PATH/d' ~/.bashrc 2>/dev/null || true
+        echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+        echo "✓ Added $LOCAL_BIN to ~/.bashrc"
+    fi
+
+    # Add to zshrc if it exists
+    if [ -f ~/.zshrc ]; then
+        # Remove any existing vdl4k PATH entries to avoid duplicates
+        sed -i '/export PATH.*bin.*PATH/d' ~/.zshrc 2>/dev/null || true
+        echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
+        echo "✓ Added $LOCAL_BIN to ~/.zshrc"
+    fi
+
+    echo "✓ Added $LOCAL_BIN to shell configuration files"
+    echo "⚠️  Please restart your terminal or run: source ~/.bashrc (or ~/.zshrc if using zsh)"
 fi
 
 # Install scripts to local bin
@@ -81,10 +96,12 @@ fi
 
 # Ultimate fallback: use find to locate vdl4k project with lib directory
 if [[ "$PROJECT_DIR" == *"/bin" ]] || [ ! -d "$PROJECT_DIR/lib" ]; then
-    PROJECT_DIR=$(find /home -name "config.sh" -type f 2>/dev/null | grep "vdl4k/lib/config.sh" | head -1 | sed 's|/lib/config.sh||')
-    if [ -z "$PROJECT_DIR" ]; then
+    # Try to find the project by looking for the lib directory directly
+    PROJECT_DIR=$(find /home -type d -name "vdl4k" 2>/dev/null | head -1)
+    if [ -z "$PROJECT_DIR" ] || [ ! -f "$PROJECT_DIR/lib/config.sh" ]; then
         echo "Error: Could not locate vdl4k project directory" >&2
         echo "Please ensure the vdl4k project is available in your home directory" >&2
+        echo "Searched locations: /home/*/Documents, /home/*/PycharmProjects, /home/*/" >&2
         exit 1
     fi
 fi
